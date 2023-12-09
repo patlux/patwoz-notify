@@ -1,0 +1,8 @@
+{
+  "name": "patwoz-notify",
+  "short_name": "patwoz-notify",
+  "icons": [],
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
