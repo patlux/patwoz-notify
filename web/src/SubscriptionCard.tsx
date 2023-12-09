@@ -37,7 +37,7 @@ export const SubscriptionCard = () => {
                     throw new Error(`Missing subscription.`)
                   }
 
-                  api.send(subscription)
+                  await api.send(subscription)
                 } catch (error: unknown) {
                   alert(`${error}`)
                 }
