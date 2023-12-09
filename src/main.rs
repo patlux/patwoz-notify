@@ -132,21 +132,12 @@ struct Subscription {
 async fn get_subscriptions(
     State(app_state): State<AppState>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
-    let subscriptions_raw = sqlx::query_as!(SubscriptionRaw, "SELECT id, data FROM subscriptions;")
-        .fetch_all(&app_state.pool)
-        .await?;
-
-    let subscriptions: Vec<Subscription> = subscriptions_raw
-        .into_iter()
-        .filter_map(|row| {
-            let data: SubscribeData = serde_json::from_str(&row.data).ok()?;
-
-            Some(Subscription {
-                id: row.id,
-                data: sqlx::types::Json(data),
-            })
-        })
-        .collect();
+    let subscriptions = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#
+    )
+    .fetch_all(&app_state.pool)
+    .await?;
 
     Ok((
         StatusCode::OK,
@@ -160,22 +151,33 @@ async fn subscribe(
     State(app_state): State<AppState>,
     Json(payload): Json<SubscribeData>,
 ) -> Result<StatusCode, AppError> {
-    let subscription_existing = sqlx::query_as!(
-        SubscriptionRaw,
-        "SELECT * FROM subscriptions WHERE json_extract(data, '$.keys.auth') == $1",
-        payload.keys.auth
+    let subscription = sqlx::query_as!(
+        Subscription,
+        r#"
+            SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions
+            WHERE
+                json_extract(data, '$.keys.auth') == $1 
+                AND
+                json_extract(data, '$.keys.p256dh') == $2
+                AND
+                json_extract(data, '$.endpoint') == $3
+            LIMIT 1
+        "#,
+        payload.keys.auth,
+        payload.keys.p256dh,
+        payload.endpoint,
     )
     .fetch_optional(&app_state.pool)
     .await?;
 
-    return match subscription_existing {
+    return match subscription {
         Some(_data) => Ok(StatusCode::NOT_MODIFIED),
         None => {
             let payload_str = serde_json::to_string(&payload)?;
 
             sqlx::query_as!(
                 SubscriptionRaw,
-                "INSERT INTO subscriptions (data) VALUES ($1) RETURNING *;",
+                "INSERT INTO subscriptions (data) VALUES ($1);",
                 payload_str,
             )
             .fetch_one(&app_state.pool)
@@ -190,18 +192,29 @@ async fn send(
     State(app_state): State<AppState>,
     Json(payload): Json<SubscribeData>,
 ) -> Result<StatusCode, AppError> {
-    sqlx::query_as!(
-        SubscriptionRaw,
-        "SELECT * FROM subscriptions WHERE json_extract(data, '$.keys.auth') == $1",
-        payload.keys.auth
+    let subscription = sqlx::query_as!(
+        Subscription,
+        r#"
+            SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions
+            WHERE
+                json_extract(data, '$.keys.auth') == $1 
+                AND
+                json_extract(data, '$.keys.p256dh') == $2
+                AND
+                json_extract(data, '$.endpoint') == $3
+            LIMIT 1
+        "#,
+        payload.keys.auth,
+        payload.keys.p256dh,
+        payload.endpoint,
     )
     .fetch_one(&app_state.pool)
     .await?;
 
     let subscription_info = web_push::SubscriptionInfo::new(
-        &payload.endpoint,
-        &payload.keys.p256dh,
-        &payload.keys.auth,
+        &subscription.data.endpoint,
+        &subscription.data.keys.p256dh,
+        &subscription.data.keys.auth,
     );
 
     let sig_builder = VapidSignatureBuilder::from_base64(
