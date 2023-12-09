@@ -17,7 +17,7 @@ bun run dev
 
 **iOS, Android**
 
-To test it locally while developing on your phone, you need a valid ssl certificate to be able to use web push notifications.
+To test it locally on your phone while developing, you need a valid ssl certificate to be able to use web push notifications.
 
 I'm using [tailscale serve](https://tailscale.com/kb/1242/tailscale-serve/) for this. But you can also use something like [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/).
 
