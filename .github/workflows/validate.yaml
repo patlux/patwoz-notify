@@ -22,16 +22,6 @@ jobs:
           sqlx database create
           sqlx migrate run
       - run: cargo test
-  formatting:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: jdx/rtx-action@v1
-      - run: |
-          cargo install sqlx-cli
-          sqlx database create
-          sqlx migrate run
-      - run: cargo fmt --check
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -42,3 +32,9 @@ jobs:
           sqlx database create
           sqlx migrate run
       - run: cargo clippy
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: jdx/rtx-action@v1
+      - run: cargo fmt --check
