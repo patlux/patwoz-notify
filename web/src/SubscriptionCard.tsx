@@ -11,21 +11,20 @@ export const SubscriptionCard = () => {
   const permission = useSubscriptionPermission(sw)
   const { subscription, subscribe } = useSubscription(sw)
 
-  const subscriptions = useQuery('/subscriptions')
+  const subscriptions = useQuery('/subscriptions', {
+    queryFn: api.getSubscriptions,
+  })
 
   return (
     <div className="p-4 rounded-xl w-full aspect-square bg-white/5">
-      <h3 className="font-light text-white text-lg">
+      <h3 className="font-light text-white text-lg mb-4">
         Subscriptions ({subscriptions.data?.subscriptions?.length})
       </h3>
       {!sw.isReady ? (
         <>Loading...</>
       ) : (
         <>
-          <p className="font-semibold text-white text-lg">
-            Permission: {permission.state ?? 'n/a'}
-          </p>
-          {subscription != null && (
+          {permission.state === 'granted' && subscription != null ? (
             <button
               type="button"
               className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
@@ -44,43 +43,37 @@ export const SubscriptionCard = () => {
                 }
               }}
             >
-              Send Notification
+              Send Test Notification
             </button>
-          )}
-          {permission.state === 'granted' && subscription == null && (
-            <>
-              <button
-                type="button"
-                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                onClick={async () => {
-                  try {
-                    await subscribe()
-                  } catch (error: unknown) {
-                    alert(`${error}`)
-                  }
-                }}
-              >
-                Subscribe
-              </button>
-            </>
-          )}
-          {permission.state !== 'granted' && (
-            <>
-              <button
-                type="button"
-                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                onClick={async () => {
-                  try {
-                    await permission.askFor()
-                  } catch (error: unknown) {
-                    alert(`${error}`)
-                  }
-                }}
-              >
-                Ask for permission
-              </button>
-            </>
-          )}
+          ) : permission.state === 'granted' && subscription == null ? (
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              onClick={async () => {
+                try {
+                  await subscribe()
+                } catch (error: unknown) {
+                  alert(`${error}`)
+                }
+              }}
+            >
+              Subscribe
+            </button>
+          ) : permission.state !== 'granted' ? (
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              onClick={async () => {
+                try {
+                  await permission.askFor()
+                } catch (error: unknown) {
+                  alert(`${error}`)
+                }
+              }}
+            >
+              Ask for permission
+            </button>
+          ) : null}
         </>
       )}
     </div>

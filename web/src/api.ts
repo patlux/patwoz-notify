@@ -1,3 +1,15 @@
+export type Subscription = {
+  id: number
+  data: {
+    expiration_time: null | number
+    endpoint: String
+    keys: {
+      p256dh: String
+      auth: String
+    }
+  }
+}
+
 export const fetchApi = (pathname: string, options?: RequestInit) => {
   return fetch(`/api${pathname}`, options)
 }
@@ -10,6 +22,12 @@ export const fetchJson = async (pathname: string, options?: RequestInit) => {
 export const getVapidPublicKey = async () => {
   const { vapidPublicKey } = await fetchJson('/public-key')
   return vapidPublicKey
+}
+
+export const getSubscriptions = async () => {
+  return fetchJson(`/subscriptions`).then(
+    (data) => data as { subscriptions: Subscription[] },
+  )
 }
 
 export const subscribe = async (subscription: PushSubscription) => {
