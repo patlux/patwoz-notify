@@ -1,5 +1,7 @@
 # patwoz-notify
 
+Free to use notification service via web push notifications.
+
 ## Setup
 
 ```sh
