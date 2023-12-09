@@ -6,22 +6,36 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  DATABASE_URL: "sqlite://data.db"
+  VAPID_PUBLIC_KEY: "BNLG7AjskQyBpH7IICsJWiIs-jRxD0GHjmfoaESNLuJFAuMqZmzmBhDGOLaWbrNevKNElBmMv3XX9_EKIzi2ITc"
+  VAPID_PRIVATE_KEY: "-4cLYHMEiH5y2XOUagkXTn3ivwQyX5Pe27TtXTkr3nM"
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: jdx/rtx-action@v1
+      - run: |
+          cargo install sqlx-cli
+          sqlx database create
       - run: cargo test
   formatting:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: jdx/rtx-action@v1
+      - run: |
+          cargo install sqlx-cli
+          sqlx database create
       - run: cargo fmt --check
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: jdx/rtx-action@v1
+      - run: |
+          cargo install sqlx-cli
+          sqlx database create
       - run: cargo clippy
