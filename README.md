@@ -25,7 +25,7 @@ I'm using [tailscale serve](https://tailscale.com/kb/1242/tailscale-serve/) for 
 tailscale serve 5173
 ```
 
-Now open https://<hostname>.<tailscale-domain>.ts.net
+Now open https://`<hostname>`.`<tailscale-domain>`.ts.net
 
 ## Setup Development
 
