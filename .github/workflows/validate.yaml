@@ -11,14 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jdx/rtx-action@v1
       - run: cargo test
   formatting:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jdx/rtx-action@v1
       - run: cargo fmt --check
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jdx/rtx-action@v1
       - run: cargo clippy
