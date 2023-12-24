@@ -11,6 +11,7 @@ use sqlx::{Pool, Sqlite, SqlitePool};
 use structopt::StructOpt;
 use tower_http::{
     cors::{Any, CorsLayer},
+    services::ServeDir,
     trace,
 };
 use tracing::{info, Level};
@@ -26,6 +27,15 @@ use web_push::{
 #[derive(StructOpt, Debug)]
 #[structopt(name = "env")]
 struct Opt {
+    #[structopt(long, env = "hostname", default_value = "0.0.0.0")]
+    hostname: String,
+
+    #[structopt(short, long, env = "PORT", default_value = "3000")]
+    port: usize,
+
+    #[structopt(long, env = "ASSETS_DIR", default_value = "web/dist")]
+    assets_dir: String,
+
     #[structopt(long, env = "DATABASE_URL")]
     database_url: String,
 
@@ -53,13 +63,14 @@ async fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
 
     let app = create_app(AppConfig {
+        assets_dir: opt.assets_dir,
         database_url: opt.database_url,
         vapid_public_key: opt.vapid_public_key,
         vapid_private_key: opt.vapid_private_key,
     })
     .await?;
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:1337").await?;
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", opt.hostname, opt.port)).await?;
 
     info!("Start http server at {}.", listener.local_addr()?);
     axum::serve(listener, app).await?;
@@ -68,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 struct AppConfig {
+    assets_dir: String,
     database_url: String,
     vapid_public_key: String,
     vapid_private_key: String,
@@ -89,8 +101,7 @@ async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
         .allow_origin(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
-        .route("/", get(hello))
+    let api = Router::new()
         .route("/public-key", get(get_public_key))
         .route("/subscriptions", get(get_subscriptions))
         .route("/subscribe", post(subscribe))
@@ -100,14 +111,19 @@ async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
         )
-        .layer(cors)
+        .layer(cors);
+
+    let app = Router::new()
+        .nest("/api", api)
+        .nest_service("/", ServeDir::new(config.assets_dir))
+        .layer(
+            trace::TraceLayer::new_for_http()
+                .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
+        )
         .with_state(app_state);
 
     Ok(app)
-}
-
-async fn hello() -> impl IntoResponse {
-    "Hello!"
 }
 
 async fn get_public_key(State(app_state): State<AppState>) -> impl IntoResponse {
@@ -276,6 +292,7 @@ mod tests {
         let vapid_public_key = env::var("VAPID_PUBLIC_KEY")?;
 
         let app = create_app(crate::AppConfig {
+            assets_dir: "web/assets".into(),
             database_url: ":memory:".into(),
             vapid_public_key: vapid_public_key.clone(),
             vapid_private_key: vapid_private_key.clone(),

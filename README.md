@@ -7,7 +7,7 @@ Main purpose is for me to learn rust.
 ## Development
 
 ```sh
-# backend (http://localhost:1337)
+# backend (http://localhost:3000)
 cargo run
 
 # frontend (http://localhost:5173)
