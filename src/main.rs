@@ -179,6 +179,8 @@ async fn get_subscriptions(
     .await
     .expect("Failed to query subscriptions.");
 
+    println!("HELLO");
+
     Ok((
         StatusCode::OK,
         Json(json!({
@@ -317,15 +319,13 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
-        assert_eq!(server.get("/").await.text(), "Hello!");
-
         assert_eq!(
-            server.get("/subscriptions").await.text(),
+            server.get("/api/subscriptions").await.text(),
             json!({ "subscriptions": [] }).to_string()
         );
 
         assert_eq!(
-            server.get("/public-key").await.text(),
+            server.get("/api/public-key").await.text(),
             json!({ "vapidPublicKey": &vapid_public_key }).to_string()
         );
 
@@ -339,13 +339,13 @@ mod tests {
         };
 
         server
-            .post("/subscribe")
+            .post("/api/subscribe")
             .json(&subscription_data)
             .await
             .assert_status(StatusCode::OK);
 
         server
-            .post("/subscribe")
+            .post("/api/subscribe")
             .json(&subscription_data)
             .await
             .assert_status(StatusCode::NOT_MODIFIED);
