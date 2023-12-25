@@ -18,11 +18,10 @@ use tracing::{info, Level};
 
 mod app_error;
 use app_error::AppError;
+// use web_push::HyperWebPushClient;
+use web_push::IsahcWebPushClient;
 use web_push::WebPushClient;
-use web_push::{
-    ContentEncoding, IsahcWebPushClient, VapidSignatureBuilder, WebPushMessageBuilder,
-    URL_SAFE_NO_PAD,
-};
+use web_push::{ContentEncoding, VapidSignatureBuilder, WebPushMessageBuilder, URL_SAFE_NO_PAD};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "env")]
@@ -59,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    dotenv::dotenv()?;
+    dotenv::dotenv().ok();
     let opt = Opt::from_args();
 
     let app = create_app(AppConfig {
@@ -68,12 +67,17 @@ async fn main() -> anyhow::Result<()> {
         vapid_public_key: opt.vapid_public_key,
         vapid_private_key: opt.vapid_private_key,
     })
-    .await?;
+    .await
+    .expect("Failed to create app.");
 
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", opt.hostname, opt.port)).await?;
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", opt.hostname, opt.port))
+        .await
+        .expect("Failed to run tcp listener.");
 
     info!("Start http server at {}.", listener.local_addr()?);
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .await
+        .expect("Failed to serve app.");
 
     Ok(())
 }
@@ -86,8 +90,13 @@ struct AppConfig {
 }
 
 async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
-    let pool = SqlitePool::connect(&config.database_url).await?;
-    sqlx::migrate!().run(&pool).await?;
+    let pool = SqlitePool::connect(&config.database_url)
+        .await
+        .expect("Couldn't connect to database.");
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations.");
 
     let app_state = AppState {
         pool,
@@ -167,7 +176,8 @@ async fn get_subscriptions(
         r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#
     )
     .fetch_all(&app_state.pool)
-    .await?;
+    .await
+    .expect("Failed to query subscriptions.");
 
     Ok((
         StatusCode::OK,
@@ -233,7 +243,8 @@ async fn send(
         payload.endpoint,
     )
     .fetch_one(&app_state.pool)
-    .await?;
+    .await
+    .expect("Failed to query subscription.");
 
     let subscription_info = web_push::SubscriptionInfo::new(
         &subscription.data.endpoint,
@@ -246,7 +257,8 @@ async fn send(
         URL_SAFE_NO_PAD,
         &subscription_info,
     )?
-    .build()?;
+    .build()
+    .expect("Failed to create signature.");
 
     let mut builder = WebPushMessageBuilder::new(&subscription_info);
 
@@ -254,16 +266,20 @@ async fn send(
     "title": "Test",
     "body": "This is a test message."
     });
-    let body = serde_json::to_string(&data)?;
+    let body = serde_json::to_string(&data).expect("Failed to serialize data.");
     let bb = body.into_bytes();
 
     builder.set_payload(ContentEncoding::Aes128Gcm, &bb);
     builder.set_vapid_signature(sig_builder);
 
+    // let client = HyperWebPushClient::new();
     let client = IsahcWebPushClient::new()?;
 
     //Finally, send the notification!
-    client.send(builder.build()?).await?;
+    client
+        .send(builder.build()?)
+        .await
+        .expect("Failed to send notification.");
 
     Ok(StatusCode::NO_CONTENT)
 }

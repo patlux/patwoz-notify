@@ -19,3 +19,4 @@ web-push = { version = "0.10.0", features = ["hyper-client"] }
 
 [dev-dependencies]
 axum-test = "14.0.0"
+
