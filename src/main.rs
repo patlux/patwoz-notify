@@ -9,11 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use structopt::StructOpt;
-use tower_http::{
-    cors::{Any, CorsLayer},
-    services::ServeDir,
-    trace,
-};
+use tower_http::{services::ServeDir, trace};
 use tracing::{info, Level};
 
 mod app_error;
@@ -104,12 +100,6 @@ async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
         vapid_public_key: config.vapid_public_key,
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_origin(Any)
-        .allow_headers(Any);
-
     let api = Router::new()
         .route("/public-key", get(get_public_key))
         .route("/subscriptions", get(get_subscriptions))
@@ -119,8 +109,7 @@ async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
             trace::TraceLayer::new_for_http()
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
-        )
-        .layer(cors);
+        );
 
     let app = Router::new()
         .nest("/api", api)
