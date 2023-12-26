@@ -14,10 +14,10 @@ use tracing::{info, Level};
 
 mod app_error;
 use app_error::AppError;
-// use web_push::HyperWebPushClient;
-use web_push::IsahcWebPushClient;
+use web_push::HyperWebPushClient;
 use web_push::WebPushClient;
 use web_push::{ContentEncoding, VapidSignatureBuilder, WebPushMessageBuilder, URL_SAFE_NO_PAD};
+use web_push::{WebPushError, WebPushMessage};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "env")]
@@ -157,6 +157,45 @@ struct Subscription {
     data: sqlx::types::Json<SubscribeData>,
 }
 
+#[derive(Serialize, Clone)]
+struct Notification {
+    title: String,
+    body: String,
+}
+
+impl Subscription {
+    fn create_notification(
+        self: &Self,
+        private_key: String,
+        notification: Notification,
+    ) -> Result<WebPushMessage, WebPushError> {
+        let subscription_info = web_push::SubscriptionInfo::new(
+            &self.data.endpoint,
+            &self.data.keys.p256dh,
+            &self.data.keys.auth,
+        );
+
+        let sig_builder = VapidSignatureBuilder::from_base64(
+            // &app_state.vapid_private_key,
+            &private_key,
+            URL_SAFE_NO_PAD,
+            &subscription_info,
+        )?
+        .build()
+        .expect("Failed to create signature.");
+
+        let mut builder = WebPushMessageBuilder::new(&subscription_info);
+
+        let body = serde_json::to_string(&notification).expect("Failed to serialize data.");
+        let bb = body.into_bytes();
+
+        builder.set_payload(ContentEncoding::Aes128Gcm, &bb);
+        builder.set_vapid_signature(sig_builder);
+
+        builder.build()
+    }
+}
+
 async fn get_subscriptions(
     State(app_state): State<AppState>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
@@ -237,38 +276,18 @@ async fn send(
     .await
     .expect("Failed to query subscription.");
 
-    let subscription_info = web_push::SubscriptionInfo::new(
-        &subscription.data.endpoint,
-        &subscription.data.keys.p256dh,
-        &subscription.data.keys.auth,
-    );
-
-    let sig_builder = VapidSignatureBuilder::from_base64(
-        &app_state.vapid_private_key,
-        URL_SAFE_NO_PAD,
-        &subscription_info,
-    )?
-    .build()
-    .expect("Failed to create signature.");
-
-    let mut builder = WebPushMessageBuilder::new(&subscription_info);
-
-    let data = json!({
-    "title": "Test",
-    "body": "This is a test message."
-    });
-    let body = serde_json::to_string(&data).expect("Failed to serialize data.");
-    let bb = body.into_bytes();
-
-    builder.set_payload(ContentEncoding::Aes128Gcm, &bb);
-    builder.set_vapid_signature(sig_builder);
-
-    // let client = HyperWebPushClient::new();
-    let client = IsahcWebPushClient::new()?;
-
-    //Finally, send the notification!
-    client
-        .send(builder.build()?)
+    HyperWebPushClient::new()
+        .send(
+            subscription
+                .create_notification(
+                    app_state.vapid_private_key,
+                    Notification {
+                        title: "Test Title".into(),
+                        body: "Test body".into(),
+                    },
+                )
+                .expect("Failed to create notification."),
+        )
         .await
         .expect("Failed to send notification.");
 
