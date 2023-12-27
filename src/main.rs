@@ -2,7 +2,10 @@ use structopt::StructOpt;
 use tracing::info;
 
 mod app_error;
+mod notification;
 mod server;
+mod subscribe_data;
+mod subscription;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "env")]
