@@ -5,15 +5,14 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 
 use crate::{
-    app_error::AppError,
-    notification::Notification,
-    subscribe_data::{self, SubscribeData},
+    app_error::AppError, notification::Notification, subscribe_data::SubscribeData,
     subscription::Subscription,
 };
 
@@ -65,10 +64,18 @@ pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
     Ok(app)
 }
 
+#[derive(Serialize)]
+struct GetPublicKeyResponseBody {
+    #[serde(rename = "vapidPublicKey")]
+    vapid_public_key: String,
+}
+
 async fn get_public_key(State(app_state): State<AppState>) -> impl IntoResponse {
     return (
         StatusCode::OK,
-        Json(json!({ "vapidPublicKey": app_state.vapid_public_key })),
+        Json(GetPublicKeyResponseBody {
+            vapid_public_key: app_state.vapid_public_key,
+        }),
     );
 }
 
@@ -113,17 +120,23 @@ async fn subscribe(
     };
 }
 
+#[derive(Deserialize)]
+struct SendPayload {
+    subscription: SubscribeData,
+    notification: Option<Notification>,
+}
+
 async fn send(
     State(app_state): State<AppState>,
-    Json(subscribe_data): Json<SubscribeData>,
+    Json(payload): Json<SendPayload>,
 ) -> Result<StatusCode, AppError> {
     let subscription =
-        Subscription::find_by_subscribe_data(&app_state.pool, &subscribe_data).await?;
+        Subscription::find_by_subscribe_data(&app_state.pool, &payload.subscription).await?;
 
-    let notification = Notification {
+    let notification = payload.notification.unwrap_or(Notification {
         title: "Test Title".into(),
         body: "Test body".into(),
-    };
+    });
 
     notification
         .send(&app_state.vapid_private_key, &subscription)

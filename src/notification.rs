@@ -1,10 +1,10 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use web_push::WebPushClient;
 use web_push::{HyperWebPushClient, WebPushError, WebPushMessage};
 
 use crate::subscription::Subscription;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Notification {
     pub title: String,
     pub body: String,

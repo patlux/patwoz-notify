@@ -50,6 +50,9 @@ export const send = (subscription: PushSubscription) => {
     headers: new Headers({
       'Content-Type': 'application/json',
     }),
-    body: JSON.stringify(subscription),
+    body: JSON.stringify({
+      subscription,
+      notification: { title: 'From JS', body: 'Hello JS World!' },
+    }),
   })
 }
