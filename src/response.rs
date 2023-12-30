@@ -1,6 +1,7 @@
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
+    Json,
 };
 
 pub struct AppError(anyhow::Error);
@@ -10,7 +11,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
+            Json(serde_json::json!({ "error": true, "message": format!("Something went wrong: {}", self.0) }))
         )
             .into_response()
     }

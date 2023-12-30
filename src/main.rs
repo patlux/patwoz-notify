@@ -1,8 +1,8 @@
 use structopt::StructOpt;
 use tracing::info;
 
-mod app_error;
 mod notification;
+mod response;
 mod server;
 mod subscribe_data;
 mod subscription;

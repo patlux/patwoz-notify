@@ -6,13 +6,13 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sqlx::{Pool, Sqlite, SqlitePool};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 
 use crate::{
-    app_error::AppError, notification::Notification, subscribe_data::SubscribeData,
+    notification::Notification, response::AppError, subscribe_data::SubscribeData,
     subscription::Subscription,
 };
 
@@ -71,17 +71,12 @@ struct GetPublicKeyResponseBody {
 }
 
 async fn get_public_key(State(app_state): State<AppState>) -> impl IntoResponse {
-    return (
-        StatusCode::OK,
-        Json(GetPublicKeyResponseBody {
-            vapid_public_key: app_state.vapid_public_key,
-        }),
-    );
+    Json(GetPublicKeyResponseBody {
+        vapid_public_key: app_state.vapid_public_key,
+    })
 }
 
-async fn get_subscriptions(
-    State(app_state): State<AppState>,
-) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
+async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoResponse {
     let subscriptions = sqlx::query_as!(
         Subscription,
         r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#
@@ -90,12 +85,9 @@ async fn get_subscriptions(
     .await
     .expect("Failed to query subscriptions.");
 
-    Ok((
-        StatusCode::OK,
-        Json(json!({
+    Json(json!({
         "subscriptions": subscriptions,
-        })),
-    ))
+    }))
 }
 
 async fn subscribe(
@@ -107,7 +99,7 @@ async fn subscribe(
         .ok();
 
     return match subscription {
-        Some(_data) => Ok(StatusCode::NOT_MODIFIED),
+        Some(_) => Ok(StatusCode::NOT_MODIFIED),
         None => {
             sqlx::query!(
                 r#"INSERT INTO subscriptions (data) VALUES ($1);"#,
