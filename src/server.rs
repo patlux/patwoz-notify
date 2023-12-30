@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
@@ -98,7 +98,7 @@ async fn subscribe(
         .await
         .ok();
 
-    return match subscription {
+    match subscription {
         Some(_) => Ok(StatusCode::NOT_MODIFIED),
         None => {
             sqlx::query!(
@@ -109,7 +109,7 @@ async fn subscribe(
             .await?;
             Ok(StatusCode::OK)
         }
-    };
+    }
 }
 
 #[derive(Deserialize)]

@@ -13,7 +13,7 @@ pub struct Subscription {
 
 impl Subscription {
     pub fn create_notification(
-        self: &Self,
+        &self,
         private_key: &str,
         notification: &Notification,
     ) -> Result<WebPushMessage, WebPushError> {
@@ -23,14 +23,10 @@ impl Subscription {
             &self.data.keys.auth,
         );
 
-        let sig_builder = VapidSignatureBuilder::from_base64(
-            // &app_state.vapid_private_key,
-            &private_key,
-            URL_SAFE_NO_PAD,
-            &subscription_info,
-        )?
-        .build()
-        .expect("Failed to create signature.");
+        let sig_builder =
+            VapidSignatureBuilder::from_base64(private_key, URL_SAFE_NO_PAD, &subscription_info)?
+                .build()
+                .expect("Failed to create signature.");
 
         let mut builder = WebPushMessageBuilder::new(&subscription_info);
 

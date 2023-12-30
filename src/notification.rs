@@ -12,18 +12,14 @@ pub struct Notification {
 
 impl Notification {
     pub fn build(
-        self: &Self,
+        &self,
         private_key: &str,
         subscription: &Subscription,
     ) -> Result<WebPushMessage, WebPushError> {
         subscription.create_notification(private_key, self)
     }
 
-    pub async fn send(
-        self: &Self,
-        private_key: &str,
-        subscription: &Subscription,
-    ) -> anyhow::Result<()> {
+    pub async fn send(&self, private_key: &str, subscription: &Subscription) -> anyhow::Result<()> {
         HyperWebPushClient::new()
             .send(
                 self.build(private_key, subscription)
