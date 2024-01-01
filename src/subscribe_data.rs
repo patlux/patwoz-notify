@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::Type, Decode, Encode, Sqlite};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Keys {
     pub p256dh: String,
     pub auth: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SubscribeData {
     #[serde(rename = "expirationTime")]
     pub expiration_time: Option<i64>,

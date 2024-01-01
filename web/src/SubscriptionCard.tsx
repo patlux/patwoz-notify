@@ -25,26 +25,54 @@ export const SubscriptionCard = () => {
       ) : (
         <>
           {permission.state === 'granted' && subscription != null ? (
-            <button
-              type="button"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              onClick={async () => {
-                try {
-                  const subscription =
-                    await sw.swRef.current!.pushManager.getSubscription()
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                onClick={async () => {
+                  try {
+                    const subscription =
+                      await sw.swRef.current!.pushManager.getSubscription()
 
-                  if (subscription == null) {
-                    throw new Error(`Missing subscription.`)
+                    if (subscription == null) {
+                      throw new Error(`Missing subscription.`)
+                    }
+
+                    await api.send(subscription, {
+                      title: 'JS',
+                      body: 'Hello JS World!',
+                    })
+                  } catch (error: unknown) {
+                    alert(`${error}`)
                   }
+                }}
+              >
+                Send Test Notification
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                onClick={async () => {
+                  try {
+                    const subscription =
+                      await sw.swRef.current!.pushManager.getSubscription()
 
-                  await api.send(subscription)
-                } catch (error: unknown) {
-                  alert(`${error}`)
-                }
-              }}
-            >
-              Send Test Notification
-            </button>
+                    if (subscription == null) {
+                      throw new Error(`Missing subscription.`)
+                    }
+
+                    await api.sendToAll({
+                      title: 'JS',
+                      body: 'Hello JS World!',
+                    })
+                  } catch (error: unknown) {
+                    alert(`${error}`)
+                  }
+                }}
+              >
+                Send Test Notification To All
+              </button>
+            </>
           ) : permission.state === 'granted' && subscription == null ? (
             <button
               type="button"

@@ -44,7 +44,10 @@ export const subscribe = async (subscription: PushSubscription) => {
   return response
 }
 
-export const send = (subscription: PushSubscription) => {
+export const send = (
+  subscription: PushSubscription,
+  notification: { title: string; body: string },
+) => {
   return fetchApi(`/send`, {
     method: 'POST',
     headers: new Headers({
@@ -52,7 +55,19 @@ export const send = (subscription: PushSubscription) => {
     }),
     body: JSON.stringify({
       subscription,
-      notification: { title: 'From JS', body: 'Hello JS World!' },
+      notification,
+    }),
+  })
+}
+
+export const sendToAll = (notification: { title: string; body: string }) => {
+  return fetchApi(`/send-to-all`, {
+    method: 'POST',
+    headers: new Headers({
+      'Content-Type': 'application/json',
+    }),
+    body: JSON.stringify({
+      notification,
     }),
   })
 }

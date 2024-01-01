@@ -21,12 +21,8 @@ impl Notification {
 
     pub async fn send(&self, private_key: &str, subscription: &Subscription) -> anyhow::Result<()> {
         HyperWebPushClient::new()
-            .send(
-                self.build(private_key, subscription)
-                    .expect("Failed to create notification."),
-            )
-            .await
-            .expect("Failed to send notification.");
+            .send(self.build(private_key, subscription)?)
+            .await?;
 
         Ok(())
     }

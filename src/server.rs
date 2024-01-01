@@ -1,3 +1,5 @@
+use std::thread::JoinHandle;
+
 use axum::{
     extract::State,
     http::StatusCode,
@@ -5,15 +7,19 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use futures::{future, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Pool, Sqlite, SqlitePool};
+use tokio::task::JoinSet;
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 
 use crate::{
-    notification::Notification, response::AppError, subscribe_data::SubscribeData,
-    subscription::Subscription,
+    notification::Notification,
+    response::AppError,
+    subscribe_data::SubscribeData,
+    subscription::{self, Subscription},
 };
 
 pub struct AppConfig {
@@ -31,13 +37,8 @@ struct AppState {
 }
 
 pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
-    let pool = SqlitePool::connect(&config.database_url)
-        .await
-        .expect("Couldn't connect to database.");
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .expect("Failed to run migrations.");
+    let pool = SqlitePool::connect(&config.database_url).await?;
+    sqlx::migrate!().run(&pool).await?;
 
     let app_state = AppState {
         pool,
@@ -49,7 +50,8 @@ pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
         .route("/public-key", get(get_public_key))
         .route("/subscriptions", get(get_subscriptions))
         .route("/subscribe", post(subscribe))
-        .route("/send", post(send));
+        .route("/send", post(send))
+        .route("/send-to-all", post(send_to_all));
 
     let app = Router::new()
         .nest("/api", api)
@@ -126,14 +128,135 @@ async fn send(
         Subscription::find_by_subscribe_data(&app_state.pool, &payload.subscription).await?;
 
     let notification = payload.notification.unwrap_or(Notification {
-        title: "Test Title".into(),
-        body: "Test body".into(),
+        title: "Test".into(),
+        body: "This is a test message.".into(),
     });
 
     notification
         .send(&app_state.vapid_private_key, &subscription)
         .await
         .expect("Failed to send notification.");
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct SendToAllPayload {
+    notification: Notification,
+}
+
+async fn send_to_all(
+    State(app_state): State<AppState>,
+    Json(payload): Json<SendToAllPayload>,
+) -> Result<StatusCode, AppError> {
+    let notification = payload.notification;
+
+    println!("Hello");
+
+    // let mut tasks = sqlx::query_as::<_, Subscription>(
+    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+    // )
+    // .fetch(&app_state.pool)
+    // .map_ok(|subscription| {
+    //     tokio::spawn(async move {
+    //         // subscription
+    //         //     .send_notification(&app_state.vapid_private_key, &notification)
+    //         //     .await;
+    //         println!("2 {:?}", &subscription.id);
+    //         Ok::<_, anyhow::Error>(())
+    //     })
+    // })
+    // .collect::<Vec<_>>();
+    // for handle in tasks {}
+    // tasks.await;
+
+    // -- stream
+
+    // let mut rows = sqlx::query_as!(
+    //     Subscription,
+    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+    // )
+    // .fetch(&app_state.pool);
+
+    // let mut set = JoinSet::<anyhow::Result<()>>::new();
+
+    // while let Some(subscription) = rows.try_next().await? {
+    //     let notification = notification.clone();
+    //     let sub = subscription.clone();
+    //     let private_key = app_state.vapid_private_key.clone();
+    //     set.spawn(async move {
+    //         println!("Send notification to {}.", subscription.id);
+    //         match &notification.send(&private_key, &sub).await {
+    //             Ok(()) => {
+    //                 println!("Send notification successfully to: {}", subscription.id);
+    //             }
+    //             Err(err) => {
+    //                 println!(
+    //                     r#"Sent notification failed to: {}. Reason: "{}"."#,
+    //                     subscription.id, err
+    //                 );
+    //             }
+    //         };
+    //         Ok(())
+    //     });
+    // }
+
+    // while let Some(a) = set.join_next().await {}
+
+    // -- stream / map
+
+    let rows = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+    )
+    .fetch(&app_state.pool)
+    .map_ok(|subscription| {
+        let notification = notification.clone();
+        let sub = subscription.clone();
+        let private_key = app_state.vapid_private_key.clone();
+        tokio::spawn(async move {
+            println!("Send notification to {}.", subscription.id);
+            match &notification.send(&private_key, &sub).await {
+                Ok(()) => {
+                    println!("Send notification successfully to: {}", subscription.id);
+                }
+                Err(err) => {
+                    println!(
+                        r#"Sent notification failed to: {}. Reason: "{}"."#,
+                        subscription.id, err
+                    );
+                }
+            };
+        })
+    })
+    .collect::<Vec<_>>();
+
+    rows.await;
+
+    // -- sync / collect
+
+    // let subscriptions = sqlx::query_as!(
+    //     Subscription,
+    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+    // )
+    // .fetch_all(&app_state.pool)
+    // .await?;
+
+    // let private_key = app_state.vapid_private_key.clone();
+
+    // for subscription in subscriptions {
+    //     match &notification.send(&private_key, &subscription).await {
+    //         Ok(()) => {
+    //             println!("Send notification successfully to: {}", subscription.id);
+    //         }
+    //         Err(err) => {
+    //             println!(
+    //                 r#"Sent notification failed to: {}. Reason: "{}"."#,
+    //                 subscription.id, err
+    //             );
+    //         }
+    //     };
+    // }
 
     Ok(StatusCode::NO_CONTENT)
 }

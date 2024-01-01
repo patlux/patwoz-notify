@@ -44,17 +44,24 @@ async fn main() -> anyhow::Result<()> {
         vapid_public_key: opt.vapid_public_key,
         vapid_private_key: opt.vapid_private_key,
     })
-    .await
-    .expect("Failed to create app.");
+    .await;
 
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", opt.hostname, opt.port))
-        .await
-        .expect("Failed to run tcp listener.");
+    match app {
+        Ok(app) => {
+            let listener = tokio::net::TcpListener::bind(format!("{}:{}", opt.hostname, opt.port))
+                .await
+                .expect("Failed to run tcp listener.");
 
-    info!("Start http server at {}.", listener.local_addr()?);
-    axum::serve(listener, app)
-        .await
-        .expect("Failed to serve app.");
+            info!("Start http server at {}.", listener.local_addr()?);
+            axum::serve(listener, app)
+                .await
+                .expect("Failed to serve app.");
+        }
+        Err(error) => {
+            // TODO: match error.kind() { ... }
+            panic!("Failed to serve app: {}.", error);
+        }
+    }
 
     Ok(())
 }

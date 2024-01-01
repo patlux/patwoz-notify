@@ -5,7 +5,7 @@ use web_push::{WebPushError, WebPushMessage};
 
 use crate::{notification::Notification, subscribe_data::SubscribeData};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Subscription {
     pub id: i64,
     pub data: sqlx::types::Json<SubscribeData>,
@@ -25,18 +25,25 @@ impl Subscription {
 
         let sig_builder =
             VapidSignatureBuilder::from_base64(private_key, URL_SAFE_NO_PAD, &subscription_info)?
-                .build()
-                .expect("Failed to create signature.");
+                .build()?;
 
         let mut builder = WebPushMessageBuilder::new(&subscription_info);
 
-        let body = serde_json::to_string(&notification).expect("Failed to serialize data.");
+        let body = serde_json::to_string(&notification)?;
         let bb = body.into_bytes();
 
         builder.set_payload(ContentEncoding::Aes128Gcm, &bb);
         builder.set_vapid_signature(sig_builder);
 
         builder.build()
+    }
+
+    pub async fn send_notification(
+        &self,
+        private_key: &str,
+        notification: &Notification,
+    ) -> anyhow::Result<()> {
+        notification.send(private_key, self).await
     }
 
     pub async fn find_by_subscribe_data(
