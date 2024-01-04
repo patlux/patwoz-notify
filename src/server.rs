@@ -8,7 +8,7 @@ use axum::{
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 
@@ -31,9 +31,19 @@ struct AppState {
     vapid_public_key: String,
 }
 
-pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
-    let pool = SqlitePool::connect(&config.database_url).await?;
+async fn create_db(database_url: &str) -> anyhow::Result<SqlitePool> {
+    if !sqlx::Sqlite::database_exists(database_url).await? {
+        sqlx::Sqlite::create_database(database_url).await?;
+    }
+
+    let pool = SqlitePool::connect(database_url).await?;
     sqlx::migrate!().run(&pool).await?;
+
+    Ok(pool)
+}
+
+pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
+    let pool = create_db(&config.database_url).await?;
 
     let app_state = AppState {
         pool,
