@@ -1,25 +1,20 @@
-use std::thread::JoinHandle;
-
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use futures::{future, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Pool, Sqlite, SqlitePool};
-use tokio::task::JoinSet;
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 
 use crate::{
-    notification::Notification,
-    response::AppError,
-    subscribe_data::SubscribeData,
-    subscription::{self, Subscription},
+    notification::Notification, response::AppError, subscribe_data::SubscribeData,
+    subscription::Subscription,
 };
 
 pub struct AppConfig {
@@ -51,7 +46,8 @@ pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
         .route("/subscriptions", get(get_subscriptions))
         .route("/subscribe", post(subscribe))
         .route("/send", post(send))
-        .route("/send-to-all", post(send_to_all));
+        .route("/send-to-all", post(send_to_all))
+        .route("/message", get(send_to_all_query));
 
     let app = Router::new()
         .nest("/api", api)
@@ -151,60 +147,6 @@ async fn send_to_all(
 ) -> Result<StatusCode, AppError> {
     let notification = payload.notification;
 
-    println!("Hello");
-
-    // let mut tasks = sqlx::query_as::<_, Subscription>(
-    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
-    // )
-    // .fetch(&app_state.pool)
-    // .map_ok(|subscription| {
-    //     tokio::spawn(async move {
-    //         // subscription
-    //         //     .send_notification(&app_state.vapid_private_key, &notification)
-    //         //     .await;
-    //         println!("2 {:?}", &subscription.id);
-    //         Ok::<_, anyhow::Error>(())
-    //     })
-    // })
-    // .collect::<Vec<_>>();
-    // for handle in tasks {}
-    // tasks.await;
-
-    // -- stream
-
-    // let mut rows = sqlx::query_as!(
-    //     Subscription,
-    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
-    // )
-    // .fetch(&app_state.pool);
-
-    // let mut set = JoinSet::<anyhow::Result<()>>::new();
-
-    // while let Some(subscription) = rows.try_next().await? {
-    //     let notification = notification.clone();
-    //     let sub = subscription.clone();
-    //     let private_key = app_state.vapid_private_key.clone();
-    //     set.spawn(async move {
-    //         println!("Send notification to {}.", subscription.id);
-    //         match &notification.send(&private_key, &sub).await {
-    //             Ok(()) => {
-    //                 println!("Send notification successfully to: {}", subscription.id);
-    //             }
-    //             Err(err) => {
-    //                 println!(
-    //                     r#"Sent notification failed to: {}. Reason: "{}"."#,
-    //                     subscription.id, err
-    //                 );
-    //             }
-    //         };
-    //         Ok(())
-    //     });
-    // }
-
-    // while let Some(a) = set.join_next().await {}
-
-    // -- stream / map
-
     let rows = sqlx::query_as!(
         Subscription,
         r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
@@ -233,30 +175,57 @@ async fn send_to_all(
 
     rows.await;
 
-    // -- sync / collect
+    Ok(StatusCode::NO_CONTENT)
+}
 
-    // let subscriptions = sqlx::query_as!(
-    //     Subscription,
-    //     r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
-    // )
-    // .fetch_all(&app_state.pool)
-    // .await?;
+#[derive(Deserialize)]
+struct MessageQueryParams {
+    title: String,
+    message: String,
+}
 
-    // let private_key = app_state.vapid_private_key.clone();
+impl From<MessageQueryParams> for Notification {
+    fn from(value: MessageQueryParams) -> Self {
+        Notification {
+            title: value.title,
+            body: value.message,
+        }
+    }
+}
 
-    // for subscription in subscriptions {
-    //     match &notification.send(&private_key, &subscription).await {
-    //         Ok(()) => {
-    //             println!("Send notification successfully to: {}", subscription.id);
-    //         }
-    //         Err(err) => {
-    //             println!(
-    //                 r#"Sent notification failed to: {}. Reason: "{}"."#,
-    //                 subscription.id, err
-    //             );
-    //         }
-    //     };
-    // }
+async fn send_to_all_query(
+    State(app_state): State<AppState>,
+    payload: Query<MessageQueryParams>,
+) -> Result<StatusCode, AppError> {
+    let notification: Notification = payload.0.into();
+
+    let rows = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+    )
+    .fetch(&app_state.pool)
+    .map_ok(|subscription| {
+        let notification = notification.clone();
+        let sub = subscription.clone();
+        let private_key = app_state.vapid_private_key.clone();
+        tokio::spawn(async move {
+            println!("Send notification to {}.", subscription.id);
+            match &notification.send(&private_key, &sub).await {
+                Ok(()) => {
+                    println!("Send notification successfully to: {}", subscription.id);
+                }
+                Err(err) => {
+                    println!(
+                        r#"Sent notification failed to: {}. Reason: "{}"."#,
+                        subscription.id, err
+                    );
+                }
+            };
+        })
+    })
+    .collect::<Vec<_>>();
+
+    rows.await;
 
     Ok(StatusCode::NO_CONTENT)
 }
