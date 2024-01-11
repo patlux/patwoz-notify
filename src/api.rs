@@ -98,6 +98,7 @@ async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoRespon
     }))
 }
 
+// POST /subscribe
 async fn subscribe(
     State(app_state): State<AppState>,
     Json(subscribe_data): Json<SubscribeData>,
@@ -126,6 +127,7 @@ struct SendPayload {
     notification: Option<Notification>,
 }
 
+// POST /send
 async fn send(
     State(app_state): State<AppState>,
     Json(payload): Json<SendPayload>,
@@ -151,6 +153,7 @@ struct SendToAllPayload {
     notification: Notification,
 }
 
+// POST /send-to-all
 async fn send_to_all(
     State(app_state): State<AppState>,
     Json(payload): Json<SendToAllPayload>,
@@ -203,6 +206,7 @@ impl From<MessageQueryParams> for Notification {
     }
 }
 
+// GET /message
 async fn send_to_all_query(
     State(app_state): State<AppState>,
     payload: Query<MessageQueryParams>,
@@ -248,7 +252,7 @@ mod tests {
     use axum_test::TestServer;
     use serde_json::json;
 
-    use crate::{server::*, subscribe_data::Keys};
+    use crate::{api::*, subscribe_data::Keys};
 
     #[tokio::test]
     async fn it_should_get_index() -> anyhow::Result<()> {

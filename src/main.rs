@@ -1,9 +1,9 @@
 use structopt::StructOpt;
 use tracing::info;
 
+mod api;
 mod notification;
 mod response;
-mod server;
 mod subscribe_data;
 mod subscription;
 
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     let opt = Opt::from_args();
 
-    let app = server::create_app(server::AppConfig {
+    let app = api::create_app(api::AppConfig {
         assets_dir: opt.assets_dir,
         database_url: opt.database_url,
         vapid_public_key: opt.vapid_public_key,
