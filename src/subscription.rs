@@ -9,6 +9,7 @@ use crate::{notification::Notification, subscribe_data::SubscribeData};
 pub struct Subscription {
     pub id: i64,
     pub data: sqlx::types::Json<SubscribeData>,
+    pub device_id: String,
 }
 
 impl Subscription {
@@ -38,13 +39,13 @@ impl Subscription {
         builder.build()
     }
 
-    pub async fn send_notification(
-        &self,
-        private_key: &str,
-        notification: &Notification,
-    ) -> anyhow::Result<()> {
-        notification.send(private_key, self).await
-    }
+    // pub async fn send_notification(
+    //     &self,
+    //     private_key: &str,
+    //     notification: &Notification,
+    // ) -> anyhow::Result<()> {
+    //     notification.send(private_key, self).await
+    // }
 
     pub async fn find_by_subscribe_data(
         pool: &Pool<Sqlite>,
@@ -53,7 +54,7 @@ impl Subscription {
         let result = sqlx::query_as!(
             Subscription,
             r#"
-            SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions
+            SELECT id, device_id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscription
             WHERE
                 json_extract(data, '$.keys.auth') == $1 
                 AND
@@ -70,5 +71,20 @@ impl Subscription {
         .await?;
 
         Ok(result)
+    }
+
+    pub async fn new_with_device_id(
+        pool: &Pool<Sqlite>,
+        device_id: String,
+    ) -> Result<Self, anyhow::Error> {
+        let subscription = sqlx::query_as!(
+            Subscription,
+            r#"SELECT id, device_id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscription WHERE device_id = $1"#,
+            device_id,
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(subscription)
     }
 }

@@ -1,3 +1,6 @@
+use std::ops::Add;
+
+use anyhow::Context;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -5,12 +8,19 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use axum_extra::{
+    extract::{cookie::Cookie, CookieJar},
+    headers::UserAgent,
+    TypedHeader,
+};
+use cookie::time::{Duration, OffsetDateTime};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
+use uuid::Uuid;
 
 use crate::{
     notification::Notification, response::AppError, subscribe_data::SubscribeData,
@@ -22,6 +32,7 @@ pub struct AppConfig {
     pub database_url: String,
     pub vapid_public_key: String,
     pub vapid_private_key: String,
+    pub secure: bool,
 }
 
 #[derive(Clone)]
@@ -29,6 +40,7 @@ struct AppState {
     pool: Pool<Sqlite>,
     vapid_private_key: String,
     vapid_public_key: String,
+    secure: bool,
 }
 
 async fn create_db(database_url: &str) -> anyhow::Result<SqlitePool> {
@@ -49,13 +61,15 @@ pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
         pool,
         vapid_private_key: config.vapid_private_key,
         vapid_public_key: config.vapid_public_key,
+        secure: config.secure,
     };
 
     let api = Router::new()
+        .route("/me", get(get_user_me))
+        .route("/me/send", post(post_send_to_me))
         .route("/public-key", get(get_public_key))
         .route("/subscriptions", get(get_subscriptions))
         .route("/subscribe", post(subscribe))
-        .route("/send", post(send))
         .route("/send-to-all", post(send_to_all))
         .route("/message", get(send_to_all_query));
 
@@ -73,6 +87,62 @@ pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
 }
 
 #[derive(Serialize)]
+struct PostAuthResponseBody {
+    device_id: String,
+}
+
+// #[derive(FromRow)]
+// struct Device {
+//     id: String,
+//     user_agent: String,
+//     name: Option<String>,
+// }
+
+async fn get_user_me(
+    State(app_state): State<AppState>,
+    TypedHeader(user_agent): TypedHeader<UserAgent>,
+    jar: CookieJar,
+) -> Result<CookieJar, AppError> {
+    let device_id = jar.get("session_id");
+
+    let device_id = device_id
+        .map(|x| x.value())
+        .unwrap_or(&Uuid::new_v4().to_string())
+        .to_owned();
+
+    let record = sqlx::query!("SELECT id FROM device WHERE id = $1", device_id)
+        .fetch_one(&app_state.pool)
+        .await;
+
+    let device_id = match record {
+        Ok(record) => {
+            // Device exists...do nothing
+            record.id
+        }
+        Err(_) => {
+            let user_agent = user_agent.to_string();
+
+            sqlx::query!(
+                "INSERT INTO device(id, user_agent) VALUES($1, $2) RETURNING id;",
+                device_id,
+                user_agent
+            )
+            .fetch_one(&app_state.pool)
+            .await?
+            .id
+        }
+    };
+
+    Ok(jar.add(
+        Cookie::build(("session_id", device_id))
+            .http_only(true)
+            .secure(app_state.secure)
+            .expires(OffsetDateTime::now_utc().add(Duration::weeks(52)))
+            .build(),
+    ))
+}
+
+#[derive(Serialize)]
 struct GetPublicKeyResponseBody {
     #[serde(rename = "vapidPublicKey")]
     vapid_public_key: String,
@@ -87,7 +157,7 @@ async fn get_public_key(State(app_state): State<AppState>) -> impl IntoResponse 
 async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoResponse {
     let subscriptions = sqlx::query_as!(
         Subscription,
-        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#
+        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>", device_id FROM subscription;"#
     )
     .fetch_all(&app_state.pool)
     .await
@@ -100,9 +170,12 @@ async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoRespon
 
 // POST /subscribe
 async fn subscribe(
+    jar: CookieJar,
     State(app_state): State<AppState>,
     Json(subscribe_data): Json<SubscribeData>,
 ) -> Result<StatusCode, AppError> {
+    let device_id = jar.get("session_id").context("Missing session_id")?.value();
+
     let subscription = Subscription::find_by_subscribe_data(&app_state.pool, &subscribe_data)
         .await
         .ok();
@@ -111,29 +184,43 @@ async fn subscribe(
         Some(_) => Ok(StatusCode::NOT_MODIFIED),
         None => {
             sqlx::query!(
-                r#"INSERT INTO subscriptions (data) VALUES ($1);"#,
-                subscribe_data
+                r#"DELETE FROM subscription WHERE device_id = $1"#,
+                device_id,
             )
             .execute(&app_state.pool)
             .await?;
+
+            sqlx::query!(
+                r#"INSERT INTO subscription (data, device_id) VALUES ($1, $2);"#,
+                subscribe_data,
+                device_id
+            )
+            .execute(&app_state.pool)
+            .await?;
+
             Ok(StatusCode::OK)
         }
     }
 }
 
 #[derive(Deserialize)]
-struct SendPayload {
-    subscription: SubscribeData,
+struct SendToMePayload {
     notification: Option<Notification>,
 }
 
 // POST /send
-async fn send(
+async fn post_send_to_me(
     State(app_state): State<AppState>,
-    Json(payload): Json<SendPayload>,
+    jar: CookieJar,
+    Json(payload): Json<SendToMePayload>,
 ) -> Result<StatusCode, AppError> {
-    let subscription =
-        Subscription::find_by_subscribe_data(&app_state.pool, &payload.subscription).await?;
+    let device_id = jar
+        .get("session_id")
+        .context("No session id")?
+        .value()
+        .to_owned();
+
+    let subscription = Subscription::new_with_device_id(&app_state.pool, device_id).await?;
 
     let notification = payload.notification.unwrap_or(Notification {
         title: "Test".into(),
@@ -142,8 +229,7 @@ async fn send(
 
     notification
         .send(&app_state.vapid_private_key, &subscription)
-        .await
-        .expect("Failed to send notification.");
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -162,7 +248,7 @@ async fn send_to_all(
 
     let rows = sqlx::query_as!(
         Subscription,
-        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>", device_id FROM subscription;"#,
     )
     .fetch(&app_state.pool)
     .map_ok(|subscription| {
@@ -215,7 +301,7 @@ async fn send_to_all_query(
 
     let rows = sqlx::query_as!(
         Subscription,
-        r#"SELECT id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscriptions;"#,
+        r#"SELECT id, device_id, data as "data: sqlx::types::Json<SubscribeData>" FROM subscription;"#,
     )
     .fetch(&app_state.pool)
     .map_ok(|subscription| {
@@ -269,6 +355,7 @@ mod tests {
         let vapid_public_key = env::var("VAPID_PUBLIC_KEY")?;
 
         let app = create_app(AppConfig {
+            secure: false,
             assets_dir: "web/assets".into(),
             database_url: ":memory:".into(),
             vapid_public_key: vapid_public_key.clone(),

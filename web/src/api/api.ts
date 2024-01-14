@@ -14,6 +14,16 @@ export const fetchApi = (pathname: string, options?: RequestInit) => {
   return fetch(`/api${pathname}`, options)
 }
 
+export const fetchMe = () => {
+  return fetchApi(`/me`, {
+    method: 'GET',
+  })
+}
+
+export const authenticate = () => {
+  return fetchMe()
+}
+
 export const fetchJson = async (pathname: string, options?: RequestInit) => {
   const response = await fetchApi(pathname, options)
   return response.json()
@@ -44,17 +54,13 @@ export const subscribe = async (subscription: PushSubscription) => {
   return response
 }
 
-export const send = (
-  subscription: PushSubscription,
-  notification: { title: string; body: string },
-) => {
-  return fetchApi(`/send`, {
+export const sendToMe = (notification: { title: string; body: string }) => {
+  return fetchApi(`/me/send`, {
     method: 'POST',
     headers: new Headers({
       'Content-Type': 'application/json',
     }),
     body: JSON.stringify({
-      subscription,
       notification,
     }),
   })

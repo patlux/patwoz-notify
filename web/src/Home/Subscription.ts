@@ -1,5 +1,5 @@
+import { api } from '../api'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import * as api from './api'
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)

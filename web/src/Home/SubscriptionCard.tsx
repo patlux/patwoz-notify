@@ -1,23 +1,24 @@
-import { useQuery } from 'react-query'
 import {
   useSubscriptionPermission,
   useServiceWorker,
   useSubscription,
 } from './Subscription'
-import * as api from './api'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '~/api'
+import { Subscription } from '~/api/api'
 
 export const SubscriptionCard = () => {
   const sw = useServiceWorker()
   const permission = useSubscriptionPermission(sw)
   const { subscription, subscribe } = useSubscription(sw)
 
-  const subscriptions = useQuery('/subscriptions', {
-    queryFn: api.getSubscriptions,
+  const subscriptions = useQuery<{ subscriptions: Subscription[] }>({
+    queryKey: ['/subscriptions'],
   })
 
   return (
-    <div className="p-4 rounded-xl w-full aspect-square bg-white/5">
-      <h3 className="font-light text-white text-lg mb-4">
+    <div className="p-4 rounded-xl w-full aspect-square bg-brand-50">
+      <h3 className="font-semibold text-black text-lg mb-4">
         Subscriptions ({subscriptions.data?.subscriptions?.length})
       </h3>
       {!sw.isReady ? (
@@ -28,7 +29,7 @@ export const SubscriptionCard = () => {
             <>
               <button
                 type="button"
-                className="mb-4 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                className="mb-4 inline-flex items-center rounded-md bg-accent-600 px-3 py-2 text-sm font-semibold text-black shadow-sm hover:bg-accent-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
                 onClick={async () => {
                   try {
                     const subscription =
@@ -38,7 +39,7 @@ export const SubscriptionCard = () => {
                       throw new Error(`Missing subscription.`)
                     }
 
-                    await api.send(subscription, {
+                    await api.sendToMe({
                       title: 'JS',
                       body: 'Hello JS World!',
                     })
@@ -51,7 +52,7 @@ export const SubscriptionCard = () => {
               </button>
               <button
                 type="button"
-                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                className="inline-flex items-center rounded-md bg-accent-600 px-3 py-2 text-sm font-semibold text-black shadow-sm hover:bg-accent-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
                 onClick={async () => {
                   try {
                     const subscription =
@@ -76,7 +77,7 @@ export const SubscriptionCard = () => {
           ) : permission.state === 'granted' && subscription == null ? (
             <button
               type="button"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="inline-flex items-center rounded-md bg-accent-600 px-3 py-2 text-sm font-semibold text-black shadow-sm hover:bg-accent-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
               onClick={async () => {
                 try {
                   await subscribe()
@@ -90,7 +91,7 @@ export const SubscriptionCard = () => {
           ) : permission.state !== 'granted' ? (
             <button
               type="button"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="inline-flex items-center rounded-md bg-accent-600 px-3 py-2 text-sm font-semibold text-black shadow-sm hover:bg-accent-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
               onClick={async () => {
                 try {
                   await permission.askFor()

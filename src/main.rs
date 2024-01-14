@@ -7,19 +7,34 @@ mod response;
 mod subscribe_data;
 mod subscription;
 
+type BoolDefaultTrue = bool;
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "env")]
 struct Opt {
-    #[structopt(long, env = "hostname", default_value = "0.0.0.0")]
+    #[structopt(long, env = "HOSTNAME", default_value = "127.0.0.1")]
     hostname: String,
 
     #[structopt(short, long, env = "PORT", default_value = "3000")]
     port: usize,
 
-    #[structopt(long, env = "ASSETS_DIR", default_value = "web/dist")]
+    #[structopt(
+        long,
+        env = "SECURE",
+        about = "Server running https or not",
+        default_value = "true"
+    )]
+    secure: BoolDefaultTrue,
+
+    #[structopt(
+        long,
+        env = "ASSETS_DIR",
+        about = "Dir of the builded web app",
+        default_value = "web/dist"
+    )]
     assets_dir: String,
 
-    #[structopt(long, env = "DATABASE_URL")]
+    #[structopt(long, env = "DATABASE_URL", about = "sqlite:// path to the database")]
     database_url: String,
 
     #[structopt(long, env = "VAPID_PRIVATE_KEY")]
@@ -43,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
         database_url: opt.database_url,
         vapid_public_key: opt.vapid_public_key,
         vapid_private_key: opt.vapid_private_key,
+        secure: opt.secure,
     })
     .await;
 

@@ -50,3 +50,8 @@ bun x web-push generate-vapid-keys --json
 cd web/
 bun install
 ```
+
+## Migrations
+
+See [sqlx-cli](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md)
+
