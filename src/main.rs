@@ -1,11 +1,6 @@
+use sqlx::{migrate::MigrateDatabase, SqlitePool};
 use structopt::StructOpt;
 use tracing::info;
-
-mod api;
-mod notification;
-mod response;
-mod subscribe_data;
-mod subscription;
 
 type BoolDefaultTrue = bool;
 
@@ -44,6 +39,17 @@ struct Opt {
     vapid_public_key: String,
 }
 
+async fn create_db(database_url: &str) -> anyhow::Result<SqlitePool> {
+    if !sqlx::Sqlite::database_exists(database_url).await? {
+        sqlx::Sqlite::create_database(database_url).await?;
+    }
+
+    let pool = SqlitePool::connect(database_url).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    Ok(pool)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -53,8 +59,11 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     let opt = Opt::from_args();
 
-    let app = api::create_app(api::AppConfig {
+    let pool = create_db(&opt.database_url).await?;
+
+    let app = api::api::create_app(api::api::AppConfig {
         assets_dir: opt.assets_dir,
+        pool,
         database_url: opt.database_url,
         vapid_public_key: opt.vapid_public_key,
         vapid_private_key: opt.vapid_private_key,

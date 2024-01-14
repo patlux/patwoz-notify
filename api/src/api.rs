@@ -17,18 +17,20 @@ use cookie::time::{Duration, OffsetDateTime};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
 use uuid::Uuid;
 
-use crate::{
-    notification::Notification, response::AppError, subscribe_data::SubscribeData,
-    subscription::Subscription,
+use database::{
+    notification::Notification, subscribe_data::SubscribeData, subscription::Subscription,
 };
+
+use crate::response::AppError;
 
 pub struct AppConfig {
     pub assets_dir: String,
+    pub pool: Pool<Sqlite>,
     pub database_url: String,
     pub vapid_public_key: String,
     pub vapid_private_key: String,
@@ -43,22 +45,9 @@ struct AppState {
     secure: bool,
 }
 
-async fn create_db(database_url: &str) -> anyhow::Result<SqlitePool> {
-    if !sqlx::Sqlite::database_exists(database_url).await? {
-        sqlx::Sqlite::create_database(database_url).await?;
-    }
-
-    let pool = SqlitePool::connect(database_url).await?;
-    sqlx::migrate!().run(&pool).await?;
-
-    Ok(pool)
-}
-
 pub async fn create_app(config: AppConfig) -> anyhow::Result<Router> {
-    let pool = create_db(&config.database_url).await?;
-
     let app_state = AppState {
-        pool,
+        pool: config.pool,
         vapid_private_key: config.vapid_private_key,
         vapid_public_key: config.vapid_public_key,
         secure: config.secure,
