@@ -6,9 +6,7 @@ export const Root = () => {
     <>
       <div className="w-full bg-brand-50">
         <div className="px-2 container mx-auto flex-1 py-4 flex flex-row justify-between items-center">
-          <div className="font-semibold font-mono hidden sm:block">
-            patwoz-notify
-          </div>
+          <div className="font-semibold font-mono">patwoz-notify</div>
         </div>
       </div>
       <NavMenu />
