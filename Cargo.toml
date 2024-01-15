@@ -3,9 +3,6 @@ name = "patwoz-notify"
 version = "0.1.0"
 edition = "2021"
 
-[toolchain]
-channel = "1.74.1"
-
 [dependencies]
 anyhow = "1.0.75"
 axum = "0.7.2"
