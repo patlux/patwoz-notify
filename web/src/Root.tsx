@@ -11,7 +11,7 @@ export const Root = () => {
       </div>
       <NavMenu />
       <Outlet />
-      <TanStackRouterDevtools />
+      {process.env.NODE_ENV === 'development' && <TanStackRouterDevtools />}
     </>
   )
 }
