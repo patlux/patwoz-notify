@@ -16,7 +16,6 @@ use axum_extra::{
 use cookie::time::{Duration, OffsetDateTime};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::{Pool, Sqlite};
 use tower_http::{services::ServeDir, trace};
 use tracing::Level;
@@ -143,6 +142,11 @@ async fn get_public_key(State(app_state): State<AppState>) -> impl IntoResponse 
     })
 }
 
+#[derive(Serialize)]
+struct GetSubscriptionsBody {
+    subscriptions: Vec<Subscription>,
+}
+
 async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoResponse {
     let subscriptions = sqlx::query_as!(
         Subscription,
@@ -152,9 +156,7 @@ async fn get_subscriptions(State(app_state): State<AppState>) -> impl IntoRespon
     .await
     .expect("Failed to query subscriptions.");
 
-    Json(json!({
-        "subscriptions": subscriptions,
-    }))
+    Json(GetSubscriptionsBody { subscriptions })
 }
 
 // POST /subscribe
