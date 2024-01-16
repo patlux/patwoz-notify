@@ -343,12 +343,17 @@ mod tests {
         let vapid_private_key = env::var("VAPID_PRIVATE_KEY")?;
         let vapid_public_key = env::var("VAPID_PUBLIC_KEY")?;
 
+        let database_url = ":memory:".to_owned();
+
+        let pool = SqlitePool::connect(database_url).await?;
+
         let app = create_app(AppConfig {
             secure: false,
             assets_dir: "web/assets".into(),
-            database_url: ":memory:".into(),
+            database_url,
             vapid_public_key: vapid_public_key.clone(),
             vapid_private_key: vapid_private_key.clone(),
+            pool: todo!(),
         })
         .await?;
 
